@@ -8,11 +8,12 @@ where s1.succession + 1 = s2.succession
 group by ligne, l.variante, s1.succession, s1.descr_fr, s1.geom, s2.geom
 order by ligne, l.variante, s1.succession;
 
--- Here we assign to each line and direction the collection of stops
--- 	the idea is to now divide the line using these points and
--- 	compute the length of each segment
-select ligne, l.variante, st_astext(st_collect(s1.geom))
-from actu_lines l 
-join actu_stops s1 on s1.code_ligne = l.ligne
-group by ligne, l.variante
-order by ligne;
+-- Line length between consecutive stops in same line and direction
+select ligne, l.variante, s1.stop_id as from, s2.stop_id as to, 
+	st_length(
+		st_linesubstring(
+			l.geom, st_linelocatepoint(st_linemerge(l.geom), s1.geom), st_linelocatepoint(st_linemerge(l.geom), s2.geom))) as dist
+from actu_lines l
+join actu_stops s1 on s1.code_ligne = l.ligne and s1.variante = l.variante
+join actu_stops s2 on s2.code_ligne = l.ligne and s2.variante = l.variante
+where s1.succession + 1 = s2.succession;
