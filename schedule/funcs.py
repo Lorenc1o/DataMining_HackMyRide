@@ -83,6 +83,9 @@ def process_line(feed, line, day):
     # use the classify function to create a new column
     reduced_timetable = classify(reduced_timetable)
 
+    # now we can normalize the headways, setting the negative values to 0
+    reduced_timetable['headway'] = reduced_timetable['headway'].apply(lambda x: 0 if x < 0 else x)
+
     return reduced_timetable[['trip_headsign','direction_id', 'stop_id','departure_time','headway','class']]
 
 def show_headways(stop_id, timetable, direction_id=1):
@@ -120,6 +123,7 @@ def show_headways(stop_id, timetable, direction_id=1):
 
 @return: pd.DataFrame with columns:
     - stop_id: str
+    - direction_id: int
     - interval_type: str
     - interval_id: int
     - interval_start: str
@@ -130,71 +134,78 @@ def compute_scheduled_headways(schedule:pd.DataFrame):
     # get all the stops
     stops = schedule.stop_id.unique()
     # create a new df
-    df = pd.DataFrame(columns=['stop_id', 'interval_id', 'interval_start', 'interval_end', 'avg_headway'])
+    df = pd.DataFrame(columns=['stop_id', 'direction_id', 'interval_id', 'interval_start', 'interval_end', 'avg_headway'])
     # for each stop
     for stop in stops:
-        # get the schedule for that stop
-        stop_schedule = schedule[schedule.stop_id == stop]
-        # make sure it is sorted by departure time
-        stop_schedule = stop_schedule.sort_values(by='departure_time')
-        current_start = -1
-        current_end = -1
-        interval_id = 0
-        sum = 0
-        count = 0
-        interval_type = ''
-        for i in range(len(stop_schedule)):
-            if stop_schedule.iloc[i]['class'] == 'punctuality':
-                if current_start != -1 and interval_type == 'regularity':
-                    # we have reached the end of a segment, compute the average headway
-                    avg_headway = sum / count
-                    # add a new row to the df
-                    df = df.append({'stop_id': stop, 'interval_type':interval_type, 'interval_id': interval_id, 'interval_start': current_start, 'interval_end': current_end, 'avg_headway': avg_headway}, ignore_index=True)
-                    # reset the variables
-                    current_start = stop_schedule.iloc[i]['departure_time']
-                    current_end = stop_schedule.iloc[i]['departure_time']
-                    interval_id += 1
-                    sum = stop_schedule.iloc[i]['headway']
-                    count = 1
-                    interval_type = 'punctuality'
-                elif current_start != -1 and interval_type == 'punctuality':
-                    # we are still in a punctuality segment
-                    current_end = stop_schedule.iloc[i]['departure_time']
-                    sum += stop_schedule.iloc[i]['headway']
-                    count += 1
+        for direction in [0,1]:
+            # get the schedule for that stop
+            stop_schedule = schedule.loc[(schedule.direction_id == direction) & (schedule.stop_id == stop)]
+            # make sure it is sorted by departure time
+            stop_schedule = stop_schedule.sort_values(by='departure_time')
+            current_start = -1
+            current_end = -1
+            interval_id = 0
+            sum = 0
+            count = 0
+            interval_type = ''
+            for i in range(len(stop_schedule)):
+                if stop_schedule.iloc[i]['class'] == 'punctuality':
+                    if current_start != -1 and interval_type == 'regularity':
+                        # we have reached the end of a regularity segment, compute the average headway
+                        avg_headway = sum / count
+                        # add a new row to the df
+                        df = df.append({'stop_id': stop, 'direction_id':direction, 'interval_type':interval_type, 'interval_id': interval_id, 'interval_start': current_start, 'interval_end': current_end, 'avg_headway': avg_headway}, ignore_index=True)
+                        # reset the variables
+                        current_start = stop_schedule.iloc[i]['departure_time']
+                        current_end = stop_schedule.iloc[i]['departure_time']
+                        interval_id += 1
+                        sum = stop_schedule.iloc[i]['headway']
+                        count = 1
+                        interval_type = 'punctuality'
+                    elif current_start != -1 and interval_type == 'punctuality':
+                        # we are still in a punctuality segment
+                        current_end = stop_schedule.iloc[i]['departure_time']
+                        sum += stop_schedule.iloc[i]['headway']
+                        count += 1
+                    else:
+                        # we are in a punctuality segment
+                        current_start = stop_schedule.iloc[i]['departure_time']
+                        current_end = stop_schedule.iloc[i]['departure_time']
+                        sum = stop_schedule.iloc[i]['headway']
+                        count = 1
+                        interval_type = 'punctuality'
                 else:
-                    # we are in a punctuality segment
-                    current_start = stop_schedule.iloc[i]['departure_time']
-                    current_end = stop_schedule.iloc[i]['departure_time']
-                    sum = stop_schedule.iloc[i]['headway']
-                    count = 1
-                    interval_type = 'punctuality'
-            else:
-                if current_start != -1 and interval_type == 'punctuality':
-                    # we have reached the end of a segment, compute the average headway
-                    avg_headway = sum / count
-                    # add a new row to the df
-                    df = df.append({'stop_id': stop, 'interval_type':interval_type, 'interval_id': interval_id, 'interval_start': current_start, 'interval_end': current_end, 'avg_headway': avg_headway}, ignore_index=True)
-                    # reset the variables
-                    current_start = stop_schedule.iloc[i]['departure_time']
-                    current_end = stop_schedule.iloc[i]['departure_time']
-                    interval_id += 1
-                    sum = stop_schedule.iloc[i]['headway']
-                    count = 1
-                    interval_type = 'regularity'
-                elif current_start != -1 and interval_type == 'regularity':
-                    # we are still in a regularity segment
-                    current_end = stop_schedule.iloc[i]['departure_time']
-                    sum += stop_schedule.iloc[i]['headway']
-                    count += 1
-                else:
-                    # we are in a regularity segment
-                    current_start = stop_schedule.iloc[i]['departure_time']
-                    current_end = stop_schedule.iloc[i]['departure_time']
-                    sum = stop_schedule.iloc[i]['headway']
-                    count = 1
-                    interval_type = 'regularity'
-        # add the last segment
-        avg_headway = sum / count
-        df = df.append({'stop_id': stop, 'interval_type':interval_type, 'interval_id': interval_id, 'interval_start': current_start, 'interval_end': current_end, 'avg_headway': avg_headway}, ignore_index=True)    
+                    if current_start != -1 and interval_type == 'punctuality':
+                        # we have reached the end of a punctuality segment, compute the average headway
+                        avg_headway = sum / count
+                        # add a new row to the df
+                        df = df.append({'stop_id': stop, 'direction_id': direction, 'interval_type':interval_type, 'interval_id': interval_id, 'interval_start': current_start, 'interval_end': current_end, 'avg_headway': avg_headway}, ignore_index=True)
+                        # reset the variables
+                        current_start = stop_schedule.iloc[i]['departure_time']
+                        current_end = stop_schedule.iloc[i]['departure_time']
+                        interval_id += 1
+                        sum = stop_schedule.iloc[i]['headway']
+                        count = 1
+                        interval_type = 'regularity'
+                    elif current_start != -1 and interval_type == 'regularity':
+                        # we are still in a regularity segment
+                        current_end = stop_schedule.iloc[i]['departure_time']
+                        sum += stop_schedule.iloc[i]['headway']
+                        count += 1
+                    else:
+                        # we are entering a regularity segment
+                        current_start = stop_schedule.iloc[i]['departure_time']
+                        current_end = stop_schedule.iloc[i]['departure_time']
+                        sum = stop_schedule.iloc[i]['headway']
+                        count = 1
+                        interval_type = 'regularity'
+            # add the last segment
+            if count == 0:
+                interval_type = schedule.iloc[-1]['class']
+                current_start = schedule.iloc[-1]['departure_time']
+                current_end = schedule.iloc[-1]['departure_time']
+                sum = schedule.iloc[-1]['headway']
+                count = 1
+            avg_headway = sum / count
+            df = df.append({'stop_id': stop,'direction_id': direction, 'interval_type':interval_type, 'interval_id': interval_id, 'interval_start': current_start, 'interval_end': current_end, 'avg_headway': avg_headway}, ignore_index=True)    
     return df
