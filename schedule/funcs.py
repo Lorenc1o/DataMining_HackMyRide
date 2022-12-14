@@ -60,8 +60,7 @@ def classify(df):
     df['class'] = class_
     return df
         
-def process_line(feed, line='65', day=['20210906']):
-    #timetable = gk.routes.build_route_timetable(feed3s,line,day)
+def process_line(feed, line, day):
     timetable = gk.routes.build_route_timetable(feed,line,day)
     # Reorder timeline:
     # first by direction_id
@@ -80,7 +79,7 @@ def process_line(feed, line='65', day=['20210906']):
     # use the classify function to create a new column
     reduced_timetable = classify(reduced_timetable)
 
-    return reduced_timetable
+    return reduced_timetable[['trip_headsign','direction_id', 'stop_id','departure_time','headway','class']]
 
 def show_headways(stop_id, timetable, direction_id=1):
     df = timetable.loc[(timetable.direction_id == direction_id) & (timetable.stop_id == stop_id)]
