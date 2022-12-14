@@ -68,6 +68,8 @@ def process_line(feed, line, day):
     # then by departure_time
     timetable = timetable.sort_values(by=['direction_id','stop_id','departure_time'])
     reduced_timetable = timetable[['trip_headsign','direction_id', 'stop_id','departure_time']]
+    # For those stop_id with a letter at the end, remove it
+    reduced_timetable['stop_id'] = reduced_timetable['stop_id'].apply(lambda x: x[:-1] if x[-1].isalpha() else x)
     # Compute the headways
     # by subtracting the departure time of the current stop to the departure time of the previous stop
     # using our function date_diff
@@ -99,3 +101,27 @@ def show_headways(stop_id, timetable, direction_id=1):
     # red = punctuality
     handles = [plt.Rectangle((0,0),1,1, color='green'), plt.Rectangle((0,0),1,1, color='red')]
     plt.legend(handles, ['regularity', 'punctuality'])
+
+'''
+@function compute_scheduled_headways
+
+@description
+    Compute the scheduled headways for a given schedule, for all the stops in the schedule
+
+@param schedule: pd.DataFrame with columns:
+    - trip_headsign: str
+    - direction_id: int
+    - stop_id: str
+    - departure_time: str
+    - headway: int
+    - class: str
+
+@return: pd.DataFrame with columns:
+    - stop_id: str
+    - interval_id: int
+    - interval_start: str
+    - interval_end: str
+    - avg_headway: float
+'''
+def compute_scheduled_headways(schedule:pd.DataFrame):
+    return 0
