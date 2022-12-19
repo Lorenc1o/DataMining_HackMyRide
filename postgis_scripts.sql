@@ -9,7 +9,7 @@ group by ligne, l.variante, s1.succession, s1.descr_fr, s1.geom, s2.geom
 order by ligne, l.variante, s1.succession;
 
 -- Line length between consecutive stops in same line and direction
-select ligne, l.variante, s1.stop_id as from, s2.stop_id as to, 
+select ligne, l.variante, s1.stop_id as from, s1.descr_fr as from_descr_fr, s2.stop_id as to, s2.descr_fr as to_descr_fr,
 	st_length(
 		st_linesubstring(
 			l.geom, st_linelocatepoint(st_linemerge(l.geom), s1.geom), st_linelocatepoint(st_linemerge(l.geom), s2.geom))) as dist
